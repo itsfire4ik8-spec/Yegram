@@ -1,3 +1,5 @@
+[file name]: app.js
+[file content begin]
 // Yegram - P2P мессенджер с сохранением аккаунтов
 class Yegram {
     constructor() {
@@ -8,14 +10,33 @@ class Yegram {
         this.friends = new Map(); // ID друга -> информация о друге
         this.ws = null;
         
-        this.serverURL = 'ws://' + window.location.hostname + ':3000';
+        // Автоматическое определение URL сервера для локальной разработки и Render.com
+        this.serverURL = this.getServerUrl();
+        
         this.emojiList = this.generateEmojiList();
         
         this.init();
     }
 
+    // Автоматическое определение URL сервера
+    getServerUrl() {
+        console.log('Определение URL сервера для:', window.location.hostname);
+        
+        // Если открыто локально (localhost) - используем localhost
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            return 'ws://localhost:10000'; // Порт из вашего server.js
+        }
+        
+        // Если открыто на Render - используем защищенный WSS и текущий домен
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        // На Render.com WebSocket должен подключаться к тому же хосту без указания порта
+        // (если ваш сервер слушает на порту, который Render проксирует)
+        return protocol + '//' + window.location.hostname + (window.location.port ? ':' + window.location.port : '');
+    }
+
     async init() {
         console.log('🚀 Yegram инициализируется...');
+        console.log('Server URL:', this.serverURL); // Для отладки
         
         // Проверяем WebRTC поддержку
         if (!this.checkWebRTCSupport()) {
@@ -40,29 +61,40 @@ class Yegram {
         const statusDot = document.getElementById('server-status');
         const statusText = document.getElementById('status-text');
         
+        console.log('Тестируем подключение к серверу:', this.serverURL);
+        
         try {
             const ws = new WebSocket(this.serverURL);
             
             ws.onopen = () => {
+                console.log('✅ Подключение к серверу установлено');
                 statusDot.className = 'status-dot online';
                 statusText.textContent = 'Сервер доступен';
                 ws.close();
             };
             
-            ws.onerror = () => {
+            ws.onerror = (error) => {
+                console.error('Ошибка подключения к серверу:', error);
                 statusDot.className = 'status-dot offline';
                 statusText.textContent = 'Сервер недоступен';
+                this.showNotification('Ошибка подключения', 'Не удалось подключиться к серверу. Проверьте, запущен ли сервер на Render.com.', 'error');
+            };
+            
+            ws.onmessage = (event) => {
+                console.log('Получено сообщение от сервера:', event.data);
             };
             
             setTimeout(() => {
                 if (ws.readyState !== WebSocket.OPEN) {
+                    console.log('Таймаут подключения к серверу');
                     statusDot.className = 'status-dot offline';
                     statusText.textContent = 'Сервер недоступен';
+                    ws.close();
                 }
-            }, 3000);
+            }, 5000); // Увеличиваем таймаут для Render.com
             
         } catch (error) {
-            console.error('Ошибка подключения:', error);
+            console.error('Ошибка создания WebSocket:', error);
             statusDot.className = 'status-dot offline';
             statusText.textContent = 'Ошибка подключения';
         }
@@ -188,8 +220,16 @@ class Yegram {
     }
     
     async connectToServer() {
+        console.log('Подключаемся к серверу:', this.serverURL);
+        
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            console.log('WebSocket уже открыт');
             return this.ws;
+        }
+        
+        // Если есть старое соединение, закрываем его
+        if (this.ws) {
+            this.ws.close();
         }
         
         return new Promise((resolve, reject) => {
@@ -202,18 +242,23 @@ class Yegram {
                     
                     // Регистрируем пользователя
                     if (this.currentUser) {
+                        console.log('Регистрируем пользователя:', this.currentUser.id);
                         this.ws.send(JSON.stringify({
                             type: 'register',
                             userId: this.currentUser.id
                         }));
                     }
                     
-                    // Keep-alive
+                    // Keep-alive для Render.com
+                    if (this.keepAliveInterval) {
+                        clearInterval(this.keepAliveInterval);
+                    }
+                    
                     this.keepAliveInterval = setInterval(() => {
-                        if (this.ws.readyState === WebSocket.OPEN) {
+                        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
                             this.ws.send(JSON.stringify({ type: 'ping' }));
                         }
-                    }, 30000);
+                    }, 45000); // 45 секунд - чтобы Render не разрывал соединение
                     
                     resolve(this.ws);
                 };
@@ -228,21 +273,32 @@ class Yegram {
                     reject(error);
                 };
                 
-                this.ws.onclose = () => {
-                    console.log('❌ Отключен от сервера');
+                this.ws.onclose = (event) => {
+                    console.log('❌ Отключен от сервера', event.code, event.reason);
                     this.updateConnectionStatus('offline');
                     
                     if (this.keepAliveInterval) {
                         clearInterval(this.keepAliveInterval);
+                        this.keepAliveInterval = null;
                     }
                     
-                    // Пробуем переподключиться
+                    // Пробуем переподключиться через 5 секунд
                     setTimeout(() => {
                         if (this.currentUser) {
+                            console.log('Попытка переподключения...');
                             this.connectToServer();
                         }
                     }, 5000);
                 };
+                
+                // Таймаут подключения
+                setTimeout(() => {
+                    if (this.ws.readyState !== WebSocket.OPEN) {
+                        console.log('Таймаут подключения WebSocket');
+                        this.ws.close();
+                        reject(new Error('WebSocket connection timeout'));
+                    }
+                }, 10000);
                 
             } catch (error) {
                 console.error('Ошибка создания WebSocket:', error);
@@ -276,7 +332,17 @@ class Yegram {
                 iceServers: [
                     { urls: 'stun:stun.l.google.com:19302' },
                     { urls: 'stun:stun1.l.google.com:19302' },
-                    { urls: 'stun:stun2.l.google.com:19302' }
+                    { urls: 'stun:stun2.l.google.com:19302' },
+                    // Для лучшей совместимости добавляем fallback STUN серверы
+                    { urls: 'stun:stun3.l.google.com:19302' },
+                    { urls: 'stun:stun4.l.google.com:19302' },
+                    // TURN серверы (для пользователей за NAT)
+                    // В реальном приложении нужно добавить свои TURN серверы
+                    // {
+                    //     urls: 'turn:your-turn-server.com:3478',
+                    //     username: 'username',
+                    //     credential: 'password'
+                    // }
                 ]
             });
             
@@ -291,12 +357,17 @@ class Yegram {
             
             connection.onicecandidate = (event) => {
                 if (event.candidate && this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    console.log('Отправляем ICE кандидат для:', friendId);
                     this.ws.send(JSON.stringify({
                         type: 'ice-candidate',
                         target: friendId,
                         candidate: event.candidate
                     }));
                 }
+            };
+            
+            connection.oniceconnectionstatechange = () => {
+                console.log(`ICE соединение с ${friendId}: ${connection.iceConnectionState}`);
             };
             
             connection.onconnectionstatechange = () => {
@@ -321,12 +392,14 @@ class Yegram {
                 this.showNotification('Подключение', 
                     `Отправляем запрос на подключение к ${friendId.substring(0, 12)}...`, 
                     'info');
+            } else {
+                throw new Error('WebSocket не подключен');
             }
             
         } catch (error) {
             console.error('Ошибка подключения:', error);
             this.showNotification('Ошибка', 
-                'Не удалось установить соединение', 
+                `Не удалось установить соединение: ${error.message}`, 
                 'error');
             this.connections.delete(friendId);
         }
@@ -334,11 +407,15 @@ class Yegram {
     
     async handleOffer(friendId, offer) {
         try {
+            console.log('Получен offer от:', friendId);
+            
             const connection = new RTCPeerConnection({
                 iceServers: [
                     { urls: 'stun:stun.l.google.com:19302' },
                     { urls: 'stun:stun1.l.google.com:19302' },
-                    { urls: 'stun:stun2.l.google.com:19302' }
+                    { urls: 'stun:stun2.l.google.com:19302' },
+                    { urls: 'stun:stun3.l.google.com:19302' },
+                    { urls: 'stun:stun4.l.google.com:19302' }
                 ]
             });
             
@@ -386,16 +463,19 @@ class Yegram {
     
     async handleAnswer(friendId, answer) {
         try {
+            console.log('Получен answer от:', friendId);
             const connection = this.connections.get(friendId);
             if (connection) {
                 await connection.setRemoteDescription(new RTCSessionDescription(answer));
                 console.log(`✅ Установлено соединение с ${friendId}`);
                 
                 // Запрашиваем информацию о друге
-                this.sendData(friendId, {
-                    type: 'user-info',
-                    user: this.currentUser
-                });
+                setTimeout(() => {
+                    this.sendData(friendId, {
+                        type: 'user-info',
+                        user: this.currentUser
+                    });
+                }, 1000);
                 
                 this.showNotification('Успешно', 
                     `Соединение установлено!`, 
@@ -411,6 +491,7 @@ class Yegram {
     
     async handleIceCandidate(friendId, candidate) {
         try {
+            console.log('Получен ICE кандидат от:', friendId);
             const connection = this.connections.get(friendId);
             if (connection) {
                 await connection.addIceCandidate(new RTCIceCandidate(candidate));
@@ -427,10 +508,12 @@ class Yegram {
             this.updateConnectionState(friendId, 'connected');
             
             // Отправляем информацию о себе
-            this.sendData(friendId, {
-                type: 'user-info',
-                user: this.currentUser
-            });
+            setTimeout(() => {
+                this.sendData(friendId, {
+                    type: 'user-info',
+                    user: this.currentUser
+                });
+            }, 500);
             
             // Обновляем список диалогов
             this.updateDialogsList();
@@ -456,8 +539,13 @@ class Yegram {
     sendData(friendId, data) {
         const dataChannel = this.dataChannels.get(friendId);
         if (dataChannel && dataChannel.readyState === 'open') {
-            dataChannel.send(JSON.stringify(data));
-            return true;
+            try {
+                dataChannel.send(JSON.stringify(data));
+                return true;
+            } catch (error) {
+                console.error('Ошибка отправки данных:', error);
+                return false;
+            }
         }
         return false;
     }
@@ -497,7 +585,7 @@ class Yegram {
             message.status = 'error';
             this.saveMessage(friendId, message, true);
             this.showNotification('Ошибка', 
-                'Не удалось отправить сообщение', 
+                'Не удалось отправить сообщение. Соединение потеряно.', 
                 'error');
             return false;
         }
@@ -506,6 +594,7 @@ class Yegram {
     handlePeerMessage(friendId, data) {
         try {
             const message = JSON.parse(data);
+            console.log('Получено сообщение от peer:', message.type, friendId);
             
             switch (message.type) {
                 case 'user-info':
@@ -1059,6 +1148,7 @@ class Yegram {
     handleServerMessage(data) {
         try {
             const message = JSON.parse(data);
+            console.log('Получено сообщение от сервера:', message.type);
             
             switch (message.type) {
                 case 'welcome':
@@ -1067,31 +1157,39 @@ class Yegram {
                     
                 case 'registered':
                     console.log('✅ Зарегистрирован на сервере');
+                    this.showNotification('Успех', 'Подключено к серверу', 'success');
                     break;
                     
                 case 'offer':
+                    console.log('Получен offer от:', message.sender);
                     this.handleOffer(message.sender, message.offer);
                     break;
                     
                 case 'answer':
+                    console.log('Получен answer от:', message.sender);
                     this.handleAnswer(message.sender, message.answer);
                     break;
                     
                 case 'ice-candidate':
+                    console.log('Получен ICE кандидат от:', message.sender);
                     this.handleIceCandidate(message.sender, message.candidate);
                     break;
                     
                 case 'error':
+                    console.error('Ошибка сервера:', message.message);
                     this.showNotification('Ошибка сервера', message.message, 'error');
                     break;
                     
                 case 'pong':
                     // Keep-alive ответ
                     break;
+                    
+                default:
+                    console.log('Неизвестный тип сообщения:', message.type);
             }
             
         } catch (error) {
-            console.error('Ошибка обработки сообщения сервера:', error);
+            console.error('Ошибка обработки сообщения сервера:', error, data);
         }
     }
     
@@ -1310,6 +1408,8 @@ class Yegram {
     }
     
     logout() {
+        console.log('Выход из аккаунта');
+        
         // Закрываем все соединения
         this.connections.forEach((connection, friendId) => {
             connection.close();
@@ -1322,6 +1422,11 @@ class Yegram {
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             this.ws.send(JSON.stringify({ type: 'disconnect' }));
             this.ws.close();
+        }
+        
+        if (this.keepAliveInterval) {
+            clearInterval(this.keepAliveInterval);
+            this.keepAliveInterval = null;
         }
         
         this.connections.clear();
@@ -1362,3 +1467,4 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 });
+[file content end]
