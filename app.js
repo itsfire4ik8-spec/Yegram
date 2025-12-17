@@ -1,5 +1,3 @@
-[file name]: app.js
-[file content begin]
 // Yegram - P2P мессенджер с сохранением аккаунтов
 class Yegram {
     constructor() {
@@ -1467,4 +1465,3 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 });
-[file content end]
