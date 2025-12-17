@@ -45,14 +45,61 @@ class Yegram {
         this.setupEventListeners();
         this.testServerConnection();
         this.loadSavedAccounts();
+        
+        // Проверяем платформу
+        this.detectPlatform();
+    }
+    
+    detectPlatform() {
+        const userAgent = navigator.userAgent.toLowerCase();
+        const platform = {
+            isMobile: /mobile|android|iphone|ipad|ipod|windows phone/i.test(userAgent),
+            isTablet: /tablet|ipad|android(?!.*mobile)/i.test(userAgent),
+            isDesktop: !(/mobile|android|iphone|ipad|ipod|windows phone|tablet/i.test(userAgent))
+        };
+        
+        console.log('Платформа:', platform);
+        
+        // Добавляем классы для адаптации
+        if (platform.isMobile) {
+            document.body.classList.add('mobile');
+        }
+        if (platform.isTablet) {
+            document.body.classList.add('tablet');
+        }
+        if (platform.isDesktop) {
+            document.body.classList.add('desktop');
+        }
     }
     
     checkWebRTCSupport() {
-        return !!(navigator.mediaDevices && 
-                 navigator.mediaDevices.getUserMedia &&
-                 window.RTCPeerConnection &&
-                 window.RTCSessionDescription &&
-                 window.RTCIceCandidate);
+        const required = [
+            'RTCPeerConnection',
+            'RTCSessionDescription',
+            'RTCIceCandidate'
+        ];
+        
+        for (const api of required) {
+            if (!window[api]) {
+                console.error('Отсутствует WebRTC API:', api);
+                return false;
+            }
+        }
+        
+        // Проверяем DataChannel поддержку
+        if (window.RTCPeerConnection) {
+            try {
+                const pc = new RTCPeerConnection();
+                const dc = pc.createDataChannel('test');
+                pc.close();
+                return true;
+            } catch (e) {
+                console.error('DataChannel не поддерживается:', e);
+                return false;
+            }
+        }
+        
+        return true;
     }
     
     async testServerConnection() {
@@ -104,31 +151,46 @@ class Yegram {
         const accounts = JSON.parse(localStorage.getItem('yegram-accounts') || '[]');
         const container = document.getElementById('saved-accounts-list');
         
-        if (!container || accounts.length === 0) return;
+        if (!container) return;
+        
+        container.innerHTML = '';
+        
+        if (accounts.length === 0) {
+            container.innerHTML = '<p class="no-accounts">Нет сохраненных аккаунтов</p>';
+            return;
+        }
         
         container.innerHTML = '<h4>Сохраненные аккаунты</h4>';
         
         accounts.forEach(account => {
-            const accountElement = document.createElement('div');
-            accountElement.className = 'account-item';
-            accountElement.dataset.userId = account.id;
-            
-            accountElement.innerHTML = `
-                <div class="account-avatar" style="background: ${account.avatarColor || '#667eea'}">
-                    ${account.name.charAt(0).toUpperCase()}
-                </div>
-                <div class="account-info">
-                    <div class="account-name">${account.name}</div>
-                    <div class="account-id">${account.id.substring(0, 16)}...</div>
-                </div>
-            `;
-            
-            accountElement.addEventListener('click', () => {
-                this.loginToAccount(account.id);
-            });
-            
+            const accountElement = this.createAccountElement(account);
             container.appendChild(accountElement);
         });
+    }
+    
+    createAccountElement(account) {
+        const accountElement = document.createElement('div');
+        accountElement.className = 'account-item';
+        accountElement.dataset.userId = account.id;
+        
+        const displayName = account.username && account.username.trim() !== '' ? 
+            `@${account.username}` : account.name;
+        
+        accountElement.innerHTML = `
+            <div class="account-avatar" style="background: ${account.avatarColor || '#667eea'}">
+                ${account.name.charAt(0).toUpperCase()}
+            </div>
+            <div class="account-info">
+                <div class="account-name">${displayName}</div>
+                <div class="account-id">${account.name}</div>
+            </div>
+        `;
+        
+        accountElement.addEventListener('click', () => {
+            this.loginToAccount(account.id);
+        });
+        
+        return accountElement;
     }
     
     async createNewAccount() {
@@ -146,6 +208,7 @@ class Yegram {
         this.currentUser = {
             id: userId,
             name: username,
+            username: '', // Пока пустой, можно будет установить позже
             avatarColor: avatarColor,
             created: Date.now(),
             lastLogin: Date.now()
@@ -158,6 +221,7 @@ class Yegram {
         this.showModal(
             'Аккаунт создан!',
             `<p>Ваш аккаунт успешно создан.</p>
+             <p><strong>Ваше имя:</strong> ${username}</p>
              <p><strong>Ваш ID:</strong></p>
              <div class="id-display">
                 <code>${userId}</code>
@@ -165,7 +229,8 @@ class Yegram {
                     <i class="fas fa-copy"></i>
                 </button>
              </div>
-             <p class="hint">Сохраните этот ID для входа в будущем!</p>`,
+             <p class="hint">Сохраните этот ID для входа в будущем!</p>
+             <p class="hint">Вы можете установить юзернейм в настройках профиля</p>`,
             'Продолжить'
         ).then(() => {
             this.showMainApp();
@@ -256,7 +321,7 @@ class Yegram {
                         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
                             this.ws.send(JSON.stringify({ type: 'ping' }));
                         }
-                    }, 45000); // 45 секунд - чтобы Render не разрывал соединение
+                    }, 30000); // 30 секунд
                     
                     resolve(this.ws);
                 };
@@ -308,8 +373,25 @@ class Yegram {
     // ==================== P2P СОЕДИНЕНИЯ ====================
     
     async connectToFriend(friendId) {
-        if (!friendId.trim()) {
-            this.showNotification('Ошибка', 'Введите ID друга', 'error');
+        // Поддержка поиска по юзернейму
+        const input = friendId.trim();
+        
+        // Если начинается с @, ищем по юзернейму
+        if (input.startsWith('@')) {
+            const username = input.substring(1);
+            const foundFriend = this.findFriendByUsername(username);
+            
+            if (foundFriend) {
+                friendId = foundFriend.id;
+                console.log('Найден друг по юзернейму:', username, 'ID:', friendId);
+            } else {
+                this.showNotification('Ошибка', `Пользователь @${username} не найден`, 'error');
+                return;
+            }
+        }
+        
+        if (!friendId) {
+            this.showNotification('Ошибка', 'Введите ID или юзернейм друга', 'error');
             return;
         }
         
@@ -325,30 +407,34 @@ class Yegram {
             return;
         }
         
+        // Оптимизированные ICE серверы для мобильных устройств
+        const iceServers = [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' },
+            { urls: 'stun:stun3.l.google.com:19302' },
+            { urls: 'stun:stun4.l.google.com:19302' },
+            // Для мобильных устройств добавляем fallback
+            { urls: 'stun:stun.stunprotocol.org:3478' },
+            { urls: 'stun:stun.voiparound.com:3478' }
+        ];
+        
+        // Для Safari на iOS добавляем специфичные настройки
+        if (this.isSafari()) {
+            iceServers.push({ urls: 'stun:stun.relay.metered.ca:80' });
+        }
+        
         try {
-            const connection = new RTCPeerConnection({
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' },
-                    { urls: 'stun:stun2.l.google.com:19302' },
-                    // Для лучшей совместимости добавляем fallback STUN серверы
-                    { urls: 'stun:stun3.l.google.com:19302' },
-                    { urls: 'stun:stun4.l.google.com:19302' },
-                    // TURN серверы (для пользователей за NAT)
-                    // В реальном приложении нужно добавить свои TURN серверы
-                    // {
-                    //     urls: 'turn:your-turn-server.com:3478',
-                    //     username: 'username',
-                    //     credential: 'password'
-                    // }
-                ]
-            });
+            const connection = new RTCPeerConnection({ iceServers });
             
             this.connections.set(friendId, connection);
             
+            // Настройка DataChannel с оптимизациями для мобильных
             const dataChannel = connection.createDataChannel('chat', {
                 ordered: true,
-                maxPacketLifeTime: 3000
+                maxRetransmits: 10,
+                negotiated: true,
+                id: 0
             });
             
             this.setupDataChannel(dataChannel, friendId);
@@ -365,17 +451,53 @@ class Yegram {
             };
             
             connection.oniceconnectionstatechange = () => {
-                console.log(`ICE соединение с ${friendId}: ${connection.iceConnectionState}`);
+                const state = connection.iceConnectionState;
+                console.log(`ICE соединение с ${friendId}: ${state}`);
+                
+                // Обработка ошибок ICE
+                if (state === 'failed' || state === 'disconnected') {
+                    console.log('Пробуем переподключиться...');
+                    setTimeout(() => {
+                        if (this.connections.has(friendId)) {
+                            this.reconnectToFriend(friendId);
+                        }
+                    }, 3000);
+                }
             };
             
             connection.onconnectionstatechange = () => {
-                console.log(`Соединение с ${friendId}: ${connection.connectionState}`);
-                this.updateConnectionState(friendId, connection.connectionState);
+                const state = connection.connectionState;
+                console.log(`Соединение с ${friendId}: ${state}`);
+                this.updateConnectionState(friendId, state);
+                
+                // Автоматический реконнект
+                if (state === 'disconnected' || state === 'failed') {
+                    console.log('Пробуем восстановить соединение...');
+                    setTimeout(() => {
+                        if (this.connections.has(friendId)) {
+                            this.reconnectToFriend(friendId);
+                        }
+                    }, 2000);
+                }
             };
+            
+            // Таймаут для установки соединения
+            const connectionTimeout = setTimeout(() => {
+                if (connection.connectionState !== 'connected' && 
+                    connection.iceConnectionState !== 'connected') {
+                    console.log('Таймаут установки соединения');
+                    this.showNotification('Ошибка', 
+                        'Не удалось установить соединение. Проверьте интернет.', 
+                        'error');
+                    connection.close();
+                    this.connections.delete(friendId);
+                }
+            }, 15000);
             
             const offer = await connection.createOffer({
                 offerToReceiveAudio: true,
-                offerToReceiveVideo: true
+                offerToReceiveVideo: true,
+                iceRestart: true // Позволяет переподключение
             });
             
             await connection.setLocalDescription(offer);
@@ -387,8 +509,13 @@ class Yegram {
                     offer: offer
                 }));
                 
+                clearTimeout(connectionTimeout);
+                
+                const friendName = friendId.startsWith('user_') ? 
+                    friendId.substring(0, 12) + '...' : friendId;
+                
                 this.showNotification('Подключение', 
-                    `Отправляем запрос на подключение к ${friendId.substring(0, 12)}...`, 
+                    `Отправляем запрос на подключение к ${friendName}...`, 
                     'info');
             } else {
                 throw new Error('WebSocket не подключен');
@@ -403,19 +530,66 @@ class Yegram {
         }
     }
     
+    async reconnectToFriend(friendId) {
+        console.log('Пробуем переподключиться к:', friendId);
+        
+        if (this.dataChannels.has(friendId)) {
+            const dc = this.dataChannels.get(friendId);
+            if (dc.readyState === 'open') {
+                console.log('DataChannel все еще открыт');
+                return;
+            }
+        }
+        
+        this.showNotification('Подключение', 
+            'Пробуем восстановить соединение...', 
+            'info');
+        
+        // Закрываем старое соединение
+        const oldConnection = this.connections.get(friendId);
+        if (oldConnection) {
+            oldConnection.close();
+        }
+        
+        // Очищаем старые соединения
+        this.connections.delete(friendId);
+        this.dataChannels.delete(friendId);
+        
+        // Ждем перед повторной попыткой
+        setTimeout(() => {
+            this.connectToFriend(friendId);
+        }, 1000);
+    }
+    
+    isSafari() {
+        return /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+    }
+    
+    findFriendByUsername(username) {
+        const friends = JSON.parse(localStorage.getItem('yegram-friends') || '{}');
+        return Object.values(friends).find(friend => 
+            friend.username && friend.username.toLowerCase() === username.toLowerCase()
+        );
+    }
+    
     async handleOffer(friendId, offer) {
         try {
             console.log('Получен offer от:', friendId);
             
-            const connection = new RTCPeerConnection({
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' },
-                    { urls: 'stun:stun2.l.google.com:19302' },
-                    { urls: 'stun:stun3.l.google.com:19302' },
-                    { urls: 'stun:stun4.l.google.com:19302' }
-                ]
-            });
+            const iceServers = [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { urls: 'stun:stun2.l.google.com:19302' },
+                { urls: 'stun:stun3.l.google.com:19302' },
+                { urls: 'stun:stun4.l.google.com:19302' },
+                { urls: 'stun:stun.stunprotocol.org:3478' }
+            ];
+            
+            if (this.isSafari()) {
+                iceServers.push({ urls: 'stun:stun.relay.metered.ca:80' });
+            }
+            
+            const connection = new RTCPeerConnection({ iceServers });
             
             this.connections.set(friendId, connection);
             
@@ -473,7 +647,7 @@ class Yegram {
                         type: 'user-info',
                         user: this.currentUser
                     });
-                }, 1000);
+                }, 500);
                 
                 this.showNotification('Успешно', 
                     `Соединение установлено!`, 
@@ -511,7 +685,7 @@ class Yegram {
                     type: 'user-info',
                     user: this.currentUser
                 });
-            }, 500);
+            }, 300);
             
             // Обновляем список диалогов
             this.updateDialogsList();
@@ -532,6 +706,20 @@ class Yegram {
         dataChannel.onmessage = (event) => {
             this.handlePeerMessage(friendId, event.data);
         };
+        
+        // Keep-alive для DataChannel
+        const keepAliveInterval = setInterval(() => {
+            if (dataChannel.readyState === 'open') {
+                try {
+                    dataChannel.send(JSON.stringify({ type: 'ping' }));
+                } catch (error) {
+                    console.error('Ошибка keep-alive:', error);
+                    clearInterval(keepAliveInterval);
+                }
+            } else {
+                clearInterval(keepAliveInterval);
+            }
+        }, 25000);
     }
     
     sendData(friendId, data) {
@@ -585,6 +773,9 @@ class Yegram {
             this.showNotification('Ошибка', 
                 'Не удалось отправить сообщение. Соединение потеряно.', 
                 'error');
+            
+            // Пробуем переподключиться
+            this.reconnectToFriend(friendId);
             return false;
         }
     }
@@ -592,7 +783,6 @@ class Yegram {
     handlePeerMessage(friendId, data) {
         try {
             const message = JSON.parse(data);
-            console.log('Получено сообщение от peer:', message.type, friendId);
             
             switch (message.type) {
                 case 'user-info':
@@ -633,6 +823,15 @@ class Yegram {
                     
                 case 'typing':
                     this.showTypingIndicator(friendId, message.typing);
+                    break;
+                    
+                case 'ping':
+                    // Keep-alive ответ
+                    this.sendData(friendId, { type: 'pong' });
+                    break;
+                    
+                case 'pong':
+                    // Keep-alive получен
                     break;
             }
             
@@ -680,6 +879,140 @@ class Yegram {
         return JSON.parse(localStorage.getItem(key) || '[]');
     }
     
+    // ==================== НАСТРОЙКИ ПРОФИЛЯ ====================
+    
+    showProfileSettings() {
+        const modal = document.getElementById('modal');
+        const modalTitle = document.getElementById('modal-title');
+        const modalBody = document.getElementById('modal-body');
+        const modalConfirm = document.getElementById('modal-confirm');
+        
+        modalTitle.textContent = 'Настройки профиля';
+        modalBody.innerHTML = `
+            <div class="form-group">
+                <label for="profile-name">Имя</label>
+                <input type="text" id="profile-name" value="${this.currentUser.name}" placeholder="Введите ваше имя" maxlength="20">
+            </div>
+            <div class="form-group">
+                <label for="profile-username">Юзернейм</label>
+                <div class="username-input">
+                    <span class="username-prefix">@</span>
+                    <input type="text" id="profile-username" value="${this.currentUser.username || ''}" placeholder="username" maxlength="30">
+                </div>
+                <p class="hint">По юзернейму вас смогут найти друзья</p>
+                <p class="hint">Если оставить пустым, поиск будет только по ID</p>
+            </div>
+            <div class="form-group">
+                <label>Цвет аватарки</label>
+                <div class="color-picker">
+                    <div class="color-option ${this.currentUser.avatarColor === '#667eea' ? 'active' : ''}" data-color="#667eea" style="background-color: #667eea;"></div>
+                    <div class="color-option ${this.currentUser.avatarColor === '#764ba2' ? 'active' : ''}" data-color="#764ba2" style="background-color: #764ba2;"></div>
+                    <div class="color-option ${this.currentUser.avatarColor === '#f093fb' ? 'active' : ''}" data-color="#f093fb" style="background-color: #f093fb;"></div>
+                    <div class="color-option ${this.currentUser.avatarColor === '#4CAF50' ? 'active' : ''}" data-color="#4CAF50" style="background-color: #4CAF50;"></div>
+                    <div class="color-option ${this.currentUser.avatarColor === '#2196F3' ? 'active' : ''}" data-color="#2196F3" style="background-color: #2196F3;"></div>
+                    <div class="color-option ${this.currentUser.avatarColor === '#FF9800' ? 'active' : ''}" data-color="#FF9800" style="background-color: #FF9800;"></div>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Ваш ID</label>
+                <div class="id-display">
+                    <code>${this.currentUser.id}</code>
+                    <button class="btn-icon copy-btn" onclick="navigator.clipboard.writeText('${this.currentUser.id}')">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+        modalConfirm.textContent = 'Сохранить';
+        
+        modal.classList.remove('hidden');
+        
+        // Инициализация выбора цвета
+        setTimeout(() => {
+            const colorOptions = modalBody.querySelectorAll('.color-option');
+            colorOptions.forEach(option => {
+                option.addEventListener('click', (e) => {
+                    colorOptions.forEach(o => o.classList.remove('active'));
+                    e.target.classList.add('active');
+                });
+            });
+        }, 100);
+        
+        const closeModal = () => {
+            modal.classList.add('hidden');
+        };
+        
+        document.querySelector('.close-modal').onclick = closeModal;
+        document.getElementById('modal-cancel').onclick = closeModal;
+        
+        modalConfirm.onclick = () => {
+            const newName = document.getElementById('profile-name').value.trim();
+            const newUsername = document.getElementById('profile-username').value.trim();
+            const colorOption = modalBody.querySelector('.color-option.active');
+            const newColor = colorOption ? colorOption.dataset.color : this.currentUser.avatarColor;
+            
+            if (!newName) {
+                this.showNotification('Ошибка', 'Имя не может быть пустым', 'error');
+                return;
+            }
+            
+            // Проверяем уникальность юзернейма
+            if (newUsername) {
+                const friends = JSON.parse(localStorage.getItem('yegram-friends') || '{}');
+                const isUsernameTaken = Object.values(friends).some(friend => 
+                    friend.username && 
+                    friend.username.toLowerCase() === newUsername.toLowerCase() &&
+                    friend.id !== this.currentUser.id
+                );
+                
+                if (isUsernameTaken) {
+                    this.showNotification('Ошибка', 'Этот юзернейм уже используется', 'error');
+                    return;
+                }
+            }
+            
+            // Обновляем профиль
+            this.currentUser.name = newName;
+            this.currentUser.username = newUsername;
+            this.currentUser.avatarColor = newColor;
+            
+            // Сохраняем изменения
+            this.saveAccount(this.currentUser);
+            
+            // Обновляем интерфейс
+            this.updateUserInterface();
+            
+            // Отправляем обновленную информацию всем подключенным друзьям
+            this.dataChannels.forEach((dc, friendId) => {
+                if (dc.readyState === 'open') {
+                    this.sendData(friendId, {
+                        type: 'user-info',
+                        user: this.currentUser
+                    });
+                }
+            });
+            
+            this.showNotification('Успех', 'Профиль обновлен', 'success');
+            closeModal();
+        };
+    }
+    
+    updateUserInterface() {
+        // Обновляем имя и аватарку в интерфейсе
+        document.getElementById('current-username').textContent = this.currentUser.name;
+        document.getElementById('avatar-letter').textContent = this.currentUser.name.charAt(0).toUpperCase();
+        document.getElementById('user-avatar').style.background = this.currentUser.avatarColor;
+        
+        // Обновляем информацию в активном чате
+        if (this.activeChat) {
+            document.getElementById('avatar-letter').textContent = this.currentUser.name.charAt(0).toUpperCase();
+            document.getElementById('user-avatar').style.background = this.currentUser.avatarColor;
+        }
+        
+        // Обновляем список диалогов
+        this.updateDialogsList();
+    }
+    
     // ==================== ИНТЕРФЕЙС ====================
     
     showLoginChoice() {
@@ -710,7 +1043,11 @@ class Yegram {
         document.getElementById('current-username').textContent = this.currentUser.name;
         document.getElementById('avatar-letter').textContent = this.currentUser.name.charAt(0).toUpperCase();
         document.getElementById('user-avatar').style.background = this.currentUser.avatarColor;
-        document.getElementById('user-id-text').textContent = this.currentUser.id;
+        
+        // Показываем ID или юзернейм
+        const displayId = this.currentUser.username && this.currentUser.username.trim() !== '' ? 
+            `@${this.currentUser.username}` : this.currentUser.id;
+        document.getElementById('user-id-text').textContent = displayId;
         
         // Загружаем диалоги
         this.updateDialogsList();
@@ -774,13 +1111,17 @@ class Yegram {
             (lastMessage.type === 'image' ? '📷 Изображение' : lastMessage.content) : 
             'Нет сообщений';
         
+        // Отображаем имя или юзернейм
+        const displayName = friend.username && friend.username.trim() !== '' ? 
+            `@${friend.username}` : friend.name;
+        
         div.innerHTML = `
             <div class="dialog-avatar" style="background: ${friend.avatarColor || '#667eea'}">
                 ${friend.name.charAt(0).toUpperCase()}
             </div>
             <div class="dialog-info">
                 <div class="dialog-header">
-                    <div class="dialog-name">${friend.name}</div>
+                    <div class="dialog-name">${displayName}</div>
                     ${lastMessage ? `
                         <div class="dialog-time">${this.formatTime(lastMessage.timestamp, true)}</div>
                     ` : ''}
@@ -819,7 +1160,7 @@ class Yegram {
         this.resetUnreadCount(friendId);
         
         // На мобильных скрываем боковую панель
-        if (window.innerWidth <= 768) {
+        if (window.innerWidth <= 768 || document.body.classList.contains('mobile')) {
             document.querySelector('.sidebar').classList.remove('active');
         }
     }
@@ -835,7 +1176,11 @@ class Yegram {
         
         const { friendId, friendInfo } = this.activeChat;
         
-        document.getElementById('chat-title').textContent = friendInfo.name;
+        // Отображаем имя или юзернейм
+        const displayName = friendInfo.username && friendInfo.username.trim() !== '' ? 
+            `@${friendInfo.username}` : friendInfo.name;
+        
+        document.getElementById('chat-title').textContent = displayName;
         document.getElementById('chat-avatar-letter').textContent = friendInfo.name.charAt(0).toUpperCase();
         document.getElementById('chat-avatar').style.background = friendInfo.avatarColor || '#667eea';
         
@@ -1054,11 +1399,14 @@ class Yegram {
         
         container.appendChild(notification);
         
+        // На мобильных увеличиваем время показа
+        const duration = document.body.classList.contains('mobile') ? 7000 : 5000;
+        
         setTimeout(() => {
             notification.style.opacity = '0';
             notification.style.transform = 'translateX(100%)';
             setTimeout(() => notification.remove(), 300);
-        }, 5000);
+        }, duration);
     }
     
     showModal(title, content, confirmText = 'OK') {
@@ -1133,6 +1481,10 @@ class Yegram {
             case 'disconnected':
                 dot.className = 'status-dot offline';
                 text.textContent = 'Нет P2P соединения';
+                break;
+            case 'failed':
+                dot.className = 'status-dot offline';
+                text.textContent = 'Ошибка P2P соединения';
                 break;
         }
     }
@@ -1270,12 +1622,25 @@ class Yegram {
             document.getElementById('friend-search-input').value = '';
         });
         
+        // Ввод в поле поиска с поддержкой @
+        const friendSearchInput = document.getElementById('friend-search-input');
+        friendSearchInput.addEventListener('input', () => {
+            const value = friendSearchInput.value.trim();
+            if (value.startsWith('@')) {
+                friendSearchInput.placeholder = 'Введите юзернейм друга';
+            } else {
+                friendSearchInput.placeholder = 'ID друга или @юзернейм';
+            }
+        });
+        
         // Копирование ID
         document.getElementById('copy-id-btn').addEventListener('click', () => {
             if (this.currentUser) {
-                navigator.clipboard.writeText(this.currentUser.id)
-                    .then(() => this.showNotification('Скопировано', 'ID скопирован в буфер', 'success'))
-                    .catch(() => this.showNotification('Ошибка', 'Не удалось скопировать ID', 'error'));
+                const textToCopy = this.currentUser.username && this.currentUser.username.trim() !== '' ? 
+                    `@${this.currentUser.username}` : this.currentUser.id;
+                navigator.clipboard.writeText(textToCopy)
+                    .then(() => this.showNotification('Скопировано', 'ID/юзернейм скопирован', 'success'))
+                    .catch(() => this.showNotification('Ошибка', 'Не удалось скопировать', 'error'));
             }
         });
         
@@ -1362,6 +1727,18 @@ class Yegram {
             }
         });
         
+        // Настройки профиля
+        document.getElementById('profile-settings').addEventListener('click', () => {
+            this.showProfileSettings();
+            userMenu.classList.add('hidden');
+        });
+        
+        // Экспорт данных
+        document.getElementById('export-data').addEventListener('click', () => {
+            this.exportData();
+            userMenu.classList.add('hidden');
+        });
+        
         // Действия в меню
         document.getElementById('switch-account').addEventListener('click', () => {
             this.showLoginChoice();
@@ -1378,6 +1755,72 @@ class Yegram {
             this.updateDialogsList();
             this.showNotification('Обновлено', 'Список диалогов обновлен', 'success');
         });
+        
+        // Обработка видимости страницы (для мобильных устройств)
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                // Страница скрыта
+                console.log('Страница скрыта');
+            } else {
+                // Страница видна - проверяем соединения
+                console.log('Страница видна');
+                if (this.currentUser) {
+                    this.connectToServer();
+                }
+            }
+        });
+        
+        // Обработка онлайн/оффлайн статуса
+        window.addEventListener('online', () => {
+            console.log('Устройство онлайн');
+            this.showNotification('Соединение', 'Интернет подключен', 'success');
+            if (this.currentUser) {
+                this.connectToServer();
+            }
+        });
+        
+        window.addEventListener('offline', () => {
+            console.log('Устройство оффлайн');
+            this.showNotification('Соединение', 'Интернет отключен', 'error');
+        });
+        
+        // Адаптация для мобильных устройств
+        this.setupMobileSupport();
+    }
+    
+    setupMobileSupport() {
+        // Переключение боковой панели на мобильных
+        const toggleSidebar = () => {
+            if (window.innerWidth <= 768 || document.body.classList.contains('mobile')) {
+                document.querySelector('.sidebar').classList.toggle('active');
+            }
+        };
+        
+        // Добавляем кнопку для мобильного меню
+        if (window.innerWidth <= 768) {
+            const mobileMenuBtn = document.createElement('button');
+            mobileMenuBtn.className = 'btn-icon mobile-menu-btn';
+            mobileMenuBtn.innerHTML = '<i class="fas fa-bars"></i>';
+            mobileMenuBtn.addEventListener('click', toggleSidebar);
+            
+            const chatHeader = document.querySelector('.chat-header .chat-info');
+            if (chatHeader) {
+                chatHeader.insertBefore(mobileMenuBtn, chatHeader.firstChild);
+            }
+        }
+        
+        // Оптимизация для сенсорных устройств
+        document.addEventListener('touchstart', () => {}, { passive: true });
+        
+        // Предотвращение масштабирования при двойном тапе
+        let lastTouchEnd = 0;
+        document.addEventListener('touchend', (event) => {
+            const now = Date.now();
+            if (now - lastTouchEnd <= 300) {
+                event.preventDefault();
+            }
+            lastTouchEnd = now;
+        }, false);
     }
     
     loadEmojiGrid(category) {
@@ -1403,6 +1846,37 @@ class Yegram {
             
             grid.appendChild(emojiElement);
         });
+    }
+    
+    exportData() {
+        const data = {
+            accounts: JSON.parse(localStorage.getItem('yegram-accounts') || '[]'),
+            friends: JSON.parse(localStorage.getItem('yegram-friends') || '{}'),
+            currentUser: JSON.parse(localStorage.getItem('yegram-current-user') || '{}')
+        };
+        
+        // Собираем все сообщения
+        const messages = {};
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key.startsWith('yegram-messages-')) {
+                messages[key] = JSON.parse(localStorage.getItem(key) || '[]');
+            }
+        }
+        
+        data.messages = messages;
+        
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `yegram-backup-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        this.showNotification('Экспорт', 'Данные успешно экспортированы', 'success');
     }
     
     logout() {
@@ -1464,4 +1938,12 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Ошибка загрузки сохраненного пользователя:', error);
         }
     }
+    
+    // Обработка ошибок WebRTC
+    window.addEventListener('error', (event) => {
+        if (event.error && event.error.message && event.error.message.includes('WebRTC')) {
+            console.error('WebRTC ошибка:', event.error);
+            yegram.showNotification('WebRTC Ошибка', 'Проблема с соединением. Попробуйте перезагрузить страницу.', 'error');
+        }
+    });
 });
