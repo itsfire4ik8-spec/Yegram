@@ -2,342 +2,378 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Yegram ✈️ - Мессенджер для друзей</title>
-    <style>
-        body { font-family: Arial; max-width: 600px; margin: auto; padding: 20px; background: linear-gradient(135deg, #667eea, #764ba2); min-height: 100vh; }
-        .container { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
-        #chat { height: 300px; border: 1px solid #ddd; border-radius: 10px; padding: 10px; margin: 10px 0; overflow-y: auto; }
-        .msg { margin: 8px 0; padding: 10px; border-radius: 10px; max-width: 80%; }
-        .my-msg { background: #667eea; color: white; margin-left: auto; text-align: right; }
-        .their-msg { background: #f0f0f0; margin-right: auto; }
-        .system-msg { background: #fff3cd; color: #856404; text-align: center; font-size: 0.9em; }
-        input, button { padding: 12px; margin: 5px 0; border-radius: 8px; border: 1px solid #ddd; width: 100%; }
-        button { background: #667eea; color: white; border: none; cursor: pointer; }
-        button:hover { background: #5a6fd8; }
-        .id-box { background: #f8f9fa; padding: 15px; border-radius: 10px; margin: 10px 0; }
-        .status { padding: 5px 10px; border-radius: 5px; display: inline-block; }
-        .online { background: #4CAF50; color: white; }
-        .offline { background: #f44336; color: white; }
-    </style>
-    <!-- Подключаем PeerJS -->
-    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Yegram - P2P Мессенджер</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✈️</text></svg>">
 </head>
 <body>
-    <div class="container">
-        <h1 style="text-align: center;">✈️ Yegram</h1>
-        <p style="text-align: center; color: #666;">Мессенджер для друзей (без сервера!)</p>
-        
-        <!-- Экран настройки -->
-        <div id="setup">
-            <div class="status offline" id="status">Отключен</div>
+    <!-- Экран выбора входа -->
+    <div id="login-choice-screen" class="login-choice-screen">
+        <div class="login-choice-container">
+            <div class="logo">
+                <div class="logo-icon">✈️</div>
+                <h1>Yegram</h1>
+                <p class="tagline">Быстрый и безопасный P2P мессенджер</p>
+            </div>
             
-            <div class="id-box">
-                <p><strong>Ваш ID:</strong></p>
-                <div style="display: flex; gap: 10px;">
-                    <input type="text" id="myId" readonly style="flex: 1;">
-                    <button onclick="copyMyId()" style="width: auto;">📋 Копировать</button>
+            <div class="choice-options">
+                <div class="option-card" id="new-account-option">
+                    <div class="option-icon">
+                        <i class="fas fa-user-plus"></i>
+                    </div>
+                    <h3>Создать новый аккаунт</h3>
+                    <p>Создайте новый профиль для общения</p>
+                    <button class="btn-outline" id="new-account-btn">Создать</button>
+                </div>
+                
+                <div class="option-card" id="existing-account-option">
+                    <div class="option-icon">
+                        <i class="fas fa-sign-in-alt"></i>
+                    </div>
+                    <h3>Войти в аккаунт</h3>
+                    <p>Войдите по сохраненному ID</p>
+                    <button class="btn-primary" id="existing-account-btn">Войти</button>
                 </div>
             </div>
             
-            <div style="margin: 20px 0;">
-                <p><strong>Подключиться к другу:</strong></p>
-                <input type="text" id="friendId" placeholder="Введите ID друга">
-                <button onclick="connectToFriend()">🔗 Подключиться</button>
+            <div class="connection-info">
+                <div class="status">
+                    <div class="status-dot" id="server-status"></div>
+                    <span id="status-text">Проверка сервера...</span>
+                </div>
             </div>
-            
-            <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; margin-top: 20px;">
-                <p><strong>Как пользоваться:</strong></p>
-                <p>1. Откройте эту страницу с другом</p>
-                <p>2. Скопируйте свой ID и отправьте другу</p>
-                <p>3. Введите ID друга в поле выше</p>
-                <p>4. Нажмите "Подключиться"</p>
-                <p>5. Общайтесь!</p>
-            </div>
-        </div>
-        
-        <!-- Экран чата -->
-        <div id="chatScreen" style="display: none;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <h3 id="chatWith">Чат с другом</h3>
-                <button onclick="disconnect()" style="width: auto; background: #f44336;">❌ Отключиться</button>
-            </div>
-            
-            <div id="chat"></div>
-            
-            <div style="display: flex; gap: 10px; margin-top: 10px;">
-                <input type="text" id="message" placeholder="Введите сообщение..." onkeypress="if(event.key=='Enter')sendMessage()">
-                <button onclick="sendMessage()" style="width: auto;">📤 Отправить</button>
-            </div>
-        </div>
-        
-        <div style="margin-top: 20px; text-align: center; color: #666; font-size: 0.9em;">
-            <p>Работает на PeerJS • Сообщения идут напрямую между вами</p>
         </div>
     </div>
 
-    <script>
-        // Yegram - Мессенджер на PeerJS
-        let peer = null;
-        let conn = null;
-        let myId = null;
-        
-        // Инициализация при загрузке
-        window.onload = function() {
-            init();
-        };
-        
-        function init() {
-            // Генерируем случайный ID
-            myId = 'yegram_' + Math.random().toString(36).substr(2, 9);
-            document.getElementById('myId').value = myId;
+    <!-- Экран создания аккаунта -->
+    <div id="create-account-screen" class="create-account-screen hidden">
+        <div class="create-account-container">
+            <div class="back-btn" id="back-to-choice-btn">
+                <i class="fas fa-arrow-left"></i> Назад
+            </div>
             
-            // Создаем Peer объект
-            // PeerJS использует свой публичный сервер для обмена сигналами
-            peer = new Peer(myId, {
-                host: '0.peerjs.com',
-                port: 443,
-                path: '/',
-                secure: true,
-                config: {
-                    iceServers: [
-                        { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' },
-                        { urls: 'stun:stun2.l.google.com:19302' }
-                    ]
-                }
-            });
+            <div class="logo">
+                <div class="logo-icon">✈️</div>
+                <h2>Создание аккаунта</h2>
+            </div>
             
-            // События Peer
-            peer.on('open', function(id) {
-                console.log('✅ Peer подключен. ID:', id);
-                document.getElementById('myId').value = id;
-                myId = id;
-                updateStatus('online', '✅ Онлайн');
-            });
-            
-            peer.on('connection', function(connection) {
-                console.log('📞 Входящее подключение от:', connection.peer);
-                conn = connection;
-                setupConnection();
-                showChatScreen();
-                updateStatus('online', '✅ Подключен к ' + connection.peer.substring(0, 8) + '...');
-            });
-            
-            peer.on('error', function(err) {
-                console.error('❌ Ошибка Peer:', err);
-                updateStatus('offline', '❌ Ошибка: ' + err.type);
-            });
-            
-            peer.on('disconnected', function() {
-                console.log('❌ Peer отключен');
-                updateStatus('offline', '❌ Отключен от сервера');
-                // Пробуем переподключиться
-                setTimeout(() => peer.reconnect(), 3000);
-            });
-        }
-        
-        function connectToFriend() {
-            const friendId = document.getElementById('friendId').value.trim();
-            if (!friendId) {
-                alert('Введите ID друга');
-                return;
-            }
-            
-            if (friendId === myId) {
-                alert('Нельзя подключиться к самому себе');
-                return;
-            }
-            
-            console.log('Подключаюсь к:', friendId);
-            
-            // Создаем подключение
-            conn = peer.connect(friendId, {
-                reliable: true
-            });
-            
-            if (!conn) {
-                alert('Не удалось создать подключение');
-                return;
-            }
-            
-            setupConnection();
-            showChatScreen();
-            updateStatus('connecting', '⏳ Подключаемся...');
-        }
-        
-        function setupConnection() {
-            conn.on('open', function() {
-                console.log('✅ Подключение установлено');
-                updateStatus('online', '✅ Подключен к другу');
-                addSystemMessage('✅ Соединение установлено! Можно общаться.');
+            <div class="account-form">
+                <div class="form-group">
+                    <label for="new-username">Имя пользователя</label>
+                    <input type="text" id="new-username" placeholder="Введите ваше имя" maxlength="20">
+                </div>
                 
-                // Обновляем заголовок чата
-                document.getElementById('chatWith').textContent = 'Чат с ' + conn.peer.substring(0, 8) + '...';
-            });
-            
-            conn.on('data', function(data) {
-                console.log('Получено сообщение:', data);
-                addMessage(data, 'friend');
-            });
-            
-            conn.on('close', function() {
-                console.log('❌ Соединение закрыто');
-                updateStatus('offline', '❌ Соединение разорвано');
-                addSystemMessage('❌ Соединение разорвано');
+                <div class="form-group">
+                    <label for="avatar-color">Цвет аватарки</label>
+                    <div class="color-picker">
+                        <div class="color-option" data-color="#667eea" style="background-color: #667eea;"></div>
+                        <div class="color-option" data-color="#764ba2" style="background-color: #764ba2;"></div>
+                        <div class="color-option" data-color="#f093fb" style="background-color: #f093fb;"></div>
+                        <div class="color-option" data-color="#4CAF50" style="background-color: #4CAF50;"></div>
+                        <div class="color-option" data-color="#2196F3" style="background-color: #2196F3;"></div>
+                        <div class="color-option" data-color="#FF9800" style="background-color: #FF9800;"></div>
+                    </div>
+                </div>
                 
-                // Возвращаем на экран настройки через 3 секунды
-                setTimeout(() => {
-                    if (!conn || conn.open === false) {
-                        showSetupScreen();
-                    }
-                }, 3000);
-            });
+                <button class="btn-primary" id="create-account-btn">
+                    <i class="fas fa-check"></i> Создать аккаунт
+                </button>
+                
+                <p class="hint">После создания сохраните ваш ID для входа в будущем</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Экран входа по ID -->
+    <div id="login-id-screen" class="login-id-screen hidden">
+        <div class="login-id-container">
+            <div class="back-btn" id="back-to-choice-btn-2">
+                <i class="fas fa-arrow-left"></i> Назад
+            </div>
             
-            conn.on('error', function(err) {
-                console.error('Ошибка соединения:', err);
-                updateStatus('offline', '❌ Ошибка соединения');
-            });
-        }
+            <div class="logo">
+                <div class="logo-icon">✈️</div>
+                <h2>Вход в аккаунт</h2>
+            </div>
+            
+            <div class="login-form">
+                <div class="form-group">
+                    <label for="user-id-input">ID аккаунта</label>
+                    <input type="text" id="user-id-input" placeholder="Введите ваш ID">
+                </div>
+                
+                <button class="btn-primary" id="login-id-btn">
+                    <i class="fas fa-sign-in-alt"></i> Войти
+                </button>
+                
+                <div class="saved-accounts" id="saved-accounts-list">
+                    <h4>Сохраненные аккаунты</h4>
+                    <!-- Список сохраненных аккаунтов загрузится через JS -->
+                </div>
+                
+                <p class="hint">ID был выдан при создании аккаунта</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Главный интерфейс -->
+    <div id="main-app" class="main-app hidden">
+        <!-- Боковая панель -->
+        <div class="sidebar">
+            <!-- Профиль пользователя -->
+            <div class="user-profile">
+                <div class="avatar" id="user-avatar" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                    <span id="avatar-letter">?</span>
+                </div>
+                <div class="user-info">
+                    <h3 id="current-username">Пользователь</h3>
+                    <div class="connection-status">
+                        <div class="status-dot online" id="connection-dot"></div>
+                        <span id="connection-status">Подключение...</span>
+                    </div>
+                </div>
+                <button class="btn-icon" id="user-menu-btn">
+                    <i class="fas fa-ellipsis-v"></i>
+                </button>
+            </div>
+
+            <!-- ID пользователя -->
+            <div class="user-id-container">
+                <div class="id-label">Ваш ID:</div>
+                <div class="id-display">
+                    <code id="user-id-text">Загрузка...</code>
+                    <button class="btn-icon copy-btn" id="copy-id-btn" title="Скопировать ID">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Поиск и подключение -->
+            <div class="connect-container">
+                <div class="search-container">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="friend-search-input" placeholder="Поиск или ID друга">
+                </div>
+                <button class="btn-primary" id="connect-btn">
+                    <i class="fas fa-link"></i> Подключиться
+                </button>
+            </div>
+
+            <!-- Список диалогов -->
+            <div class="dialogs-list">
+                <div class="dialogs-header">
+                    <h4>Диалоги</h4>
+                    <button class="btn-icon" id="refresh-dialogs-btn" title="Обновить">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+                <div class="dialogs" id="dialogs-list">
+                    <!-- Список диалогов загрузится через JS -->
+                </div>
+            </div>
+
+            <!-- Меню пользователя -->
+            <div class="user-menu hidden" id="user-menu">
+                <div class="menu-item" id="profile-settings">
+                    <i class="fas fa-user-cog"></i> Настройки профиля
+                </div>
+                <div class="menu-item" id="export-data">
+                    <i class="fas fa-download"></i> Экспорт данных
+                </div>
+                <div class="menu-divider"></div>
+                <div class="menu-item" id="switch-account">
+                    <i class="fas fa-exchange-alt"></i> Сменить аккаунт
+                </div>
+                <div class="menu-item" id="logout-btn">
+                    <i class="fas fa-sign-out-alt"></i> Выйти
+                </div>
+            </div>
+        </div>
+
+        <!-- Основная область -->
+        <div class="main-content">
+            <!-- Экран приветствия -->
+            <div id="welcome-screen" class="welcome-screen">
+                <div class="welcome-content">
+                    <div class="welcome-icon">✈️</div>
+                    <h2>Добро пожаловать в Yegram!</h2>
+                    <p>1. Скопируйте свой ID и отправьте другу</p>
+                    <p>2. Введите ID друга в поле поиска слева</p>
+                    <p>3. Нажмите "Подключиться"</p>
+                    <p>4. Начните общение напрямую!</p>
+                    
+                    <div class="stats">
+                        <div class="stat-item">
+                            <i class="fas fa-shield-alt"></i>
+                            <div>
+                                <h4>Безопасность</h4>
+                                <p>P2P шифрование</p>
+                            </div>
+                        </div>
+                        <div class="stat-item">
+                            <i class="fas fa-bolt"></i>
+                            <div>
+                                <h4>Скорость</h4>
+                                <p>Прямое соединение</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Активный чат -->
+            <div id="active-chat" class="active-chat hidden">
+                <!-- Заголовок чата -->
+                <div class="chat-header">
+                    <div class="chat-info">
+                        <div class="back-btn" id="back-to-dialogs-btn">
+                            <i class="fas fa-arrow-left"></i>
+                        </div>
+                        <div class="chat-contact">
+                            <div class="avatar" id="chat-avatar">
+                                <span id="chat-avatar-letter">?</span>
+                            </div>
+                            <div>
+                                <h3 id="chat-title">Диалог</h3>
+                                <div class="p2p-status">
+                                    <div class="status-dot" id="p2p-status-dot"></div>
+                                    <span id="p2p-status-text">P2P соединение...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="chat-actions">
+                        <button class="btn-icon" id="chat-info-btn" title="Информация">
+                            <i class="fas fa-info-circle"></i>
+                        </button>
+                        <button class="btn-icon" id="clear-chat-btn" title="Очистить чат">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- История сообщений -->
+                <div class="messages-wrapper">
+                    <div class="messages-container" id="messages-container">
+                        <!-- Сообщения загрузятся через JS -->
+                    </div>
+                    <div class="scroll-indicator hidden" id="scroll-indicator">
+                        <i class="fas fa-chevron-down"></i> Новые сообщения
+                    </div>
+                </div>
+
+                <!-- Панель ввода -->
+                <div class="input-container">
+                    <button class="btn-icon" id="attach-btn" title="Прикрепить файл">
+                        <i class="fas fa-paperclip"></i>
+                    </button>
+                    <input type="file" id="file-input" accept="image/*" hidden>
+                    
+                    <div class="message-input-wrapper">
+                        <div class="message-input">
+                            <textarea id="message-input" placeholder="Введите сообщение..." rows="1"></textarea>
+                            <button class="btn-icon" id="emoji-btn" title="Эмодзи">
+                                <i class="far fa-smile"></i>
+                            </button>
+                        </div>
+                        <div class="typing-indicator hidden" id="typing-indicator">
+                            <span></span><span></span><span></span>
+                        </div>
+                    </div>
+                    
+                    <button class="btn-icon send-btn" id="send-btn" title="Отправить">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+
+                <!-- Панель эмодзи -->
+                <div class="emoji-picker hidden" id="emoji-picker">
+                    <div class="emoji-categories">
+                        <button class="emoji-category active" data-category="smileys">😀</button>
+                        <button class="emoji-category" data-category="gestures">👋</button>
+                        <button class="emoji-category" data-category="objects">💡</button>
+                    </div>
+                    <div class="emoji-grid" id="emoji-grid">
+                        <!-- Эмодзи загрузятся через JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Информация о чате -->
+            <div class="chat-info-panel hidden" id="chat-info-panel">
+                <div class="panel-header">
+                    <h3>Информация о чате</h3>
+                    <button class="btn-icon close-panel">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="panel-body">
+                    <div class="chat-details">
+                        <div class="detail-item">
+                            <span class="detail-label">Собеседник:</span>
+                            <span class="detail-value" id="chat-partner-name">-</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">ID собеседника:</span>
+                            <span class="detail-value" id="chat-partner-id">-</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Сообщений:</span>
+                            <span class="detail-value" id="message-count">0</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Статус:</span>
+                            <span class="detail-value" id="chat-status">Неактивно</span>
+                        </div>
+                    </div>
+                    
+                    <div class="info-actions">
+                        <button class="btn-full" id="export-chat-btn">
+                            <i class="fas fa-download"></i> Экспорт истории
+                        </button>
+                        <button class="btn-full btn-danger" id="delete-chat-btn">
+                            <i class="fas fa-trash"></i> Удалить диалог
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Уведомления -->
+        <div class="notifications" id="notifications"></div>
         
-        function sendMessage() {
-            const messageInput = document.getElementById('message');
-            const message = messageInput.value.trim();
-            
-            if (!message) return;
-            
-            if (conn && conn.open) {
-                // Отправляем сообщение
-                conn.send(message);
-                addMessage(message, 'me');
-                messageInput.value = '';
-            } else {
-                alert('Сначала подключитесь к другу!');
-            }
-        }
-        
-        function addMessage(text, sender) {
-            const chat = document.getElementById('chat');
-            const messageDiv = document.createElement('div');
-            messageDiv.className = 'msg ' + (sender === 'me' ? 'my-msg' : 'their-msg');
-            messageDiv.textContent = text;
-            chat.appendChild(messageDiv);
-            
-            // Прокручиваем вниз
-            chat.scrollTop = chat.scrollHeight;
-            
-            // Сохраняем в localStorage
-            saveMessage(text, sender);
-        }
-        
-        function addSystemMessage(text) {
-            const chat = document.getElementById('chat');
-            const messageDiv = document.createElement('div');
-            messageDiv.className = 'msg system-msg';
-            messageDiv.textContent = text;
-            chat.appendChild(messageDiv);
-            
-            chat.scrollTop = chat.scrollHeight;
-        }
-        
-        function saveMessage(text, sender) {
-            if (!conn) return;
-            
-            const chatKey = 'yegram_chat_' + conn.peer;
-            const messages = JSON.parse(localStorage.getItem(chatKey) || '[]');
-            
-            messages.push({
-                text: text,
-                sender: sender,
-                time: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
-            });
-            
-            // Сохраняем только последние 100 сообщений
-            if (messages.length > 100) {
-                messages.splice(0, messages.length - 100);
-            }
-            
-            localStorage.setItem(chatKey, JSON.stringify(messages));
-        }
-        
-        function loadMessages() {
-            if (!conn) return;
-            
-            const chatKey = 'yegram_chat_' + conn.peer;
-            const messages = JSON.parse(localStorage.getItem(chatKey) || '[]');
-            
-            const chat = document.getElementById('chat');
-            chat.innerHTML = '';
-            
-            messages.forEach(msg => {
-                const messageDiv = document.createElement('div');
-                messageDiv.className = 'msg ' + (msg.sender === 'me' ? 'my-msg' : 'their-msg');
-                messageDiv.textContent = msg.text;
-                chat.appendChild(messageDiv);
-            });
-            
-            chat.scrollTop = chat.scrollHeight;
-        }
-        
-        function copyMyId() {
-            const idInput = document.getElementById('myId');
-            idInput.select();
-            document.execCommand('copy');
-            
-            // Показываем уведомление
-            const originalText = idInput.value;
-            idInput.value = '✅ Скопировано!';
-            setTimeout(() => {
-                idInput.value = originalText;
-            }, 1500);
-        }
-        
-        function showChatScreen() {
-            document.getElementById('setup').style.display = 'none';
-            document.getElementById('chatScreen').style.display = 'block';
-            
-            // Загружаем историю сообщений
-            setTimeout(loadMessages, 100);
-        }
-        
-        function showSetupScreen() {
-            document.getElementById('setup').style.display = 'block';
-            document.getElementById('chatScreen').style.display = 'none';
-            document.getElementById('chat').innerHTML = '';
-            document.getElementById('friendId').value = '';
-            document.getElementById('message').value = '';
-            
-            // Закрываем соединение
-            if (conn) {
-                conn.close();
-                conn = null;
-            }
-        }
-        
-        function disconnect() {
-            if (conn) {
-                conn.close();
-                conn = null;
-            }
-            
-            addSystemMessage('Вы отключились от чата');
-            setTimeout(showSetupScreen, 1000);
-        }
-        
-        function updateStatus(type, text) {
-            const statusEl = document.getElementById('status');
-            statusEl.textContent = text;
-            statusEl.className = 'status ' + type;
-        }
-        
-        // Автоотключение при закрытии страницы
-        window.addEventListener('beforeunload', function() {
-            if (conn) {
-                conn.close();
-            }
-            if (peer) {
-                peer.destroy();
-            }
-        });
-    </script>
+        <!-- Модальное окно -->
+        <div class="modal hidden" id="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 id="modal-title">Заголовок</h3>
+                    <button class="btn-icon close-modal">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body" id="modal-body">
+                    Содержимое модального окна
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-outline" id="modal-cancel">Отмена</button>
+                    <button class="btn-primary" id="modal-confirm">Подтвердить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Аудио элементы -->
+    <audio id="notification-sound" preload="auto">
+        <source src="https://assets.mixkit.co/sfx/preview/mixkit-correct-answer-tone-2870.mp3" type="audio/mpeg">
+    </audio>
+    
+    <audio id="message-sound" preload="auto">
+        <source src="https://assets.mixkit.co/sfx/preview/mixkit-message-pop-alert-2354.mp3" type="audio/mpeg">
+    </audio>
+
+    <script src="app.js"></script>
 </body>
 </html>
