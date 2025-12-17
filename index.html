@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Yegram - P2P Мессенджер</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -69,7 +69,7 @@
                 <div class="form-group">
                     <label for="avatar-color">Цвет аватарки</label>
                     <div class="color-picker">
-                        <div class="color-option" data-color="#667eea" style="background-color: #667eea;"></div>
+                        <div class="color-option active" data-color="#667eea" style="background-color: #667eea;"></div>
                         <div class="color-option" data-color="#764ba2" style="background-color: #764ba2;"></div>
                         <div class="color-option" data-color="#f093fb" style="background-color: #f093fb;"></div>
                         <div class="color-option" data-color="#4CAF50" style="background-color: #4CAF50;"></div>
@@ -119,142 +119,105 @@
         </div>
     </div>
 
-    <!-- Главный интерфейс -->
+    <!-- Главный интерфейс (Telegram стиль) -->
     <div id="main-app" class="main-app hidden">
-        <!-- Боковая панель -->
-        <div class="sidebar">
-            <!-- Профиль пользователя -->
-            <div class="user-profile">
-                <div class="avatar" id="user-avatar" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
-                    <span id="avatar-letter">?</span>
-                </div>
-                <div class="user-info">
-                    <h3 id="current-username">Пользователь</h3>
-                    <div class="connection-status">
-                        <div class="status-dot online" id="connection-dot"></div>
-                        <span id="connection-status">Подключение...</span>
+        <!-- Мобильный хедер -->
+        <div class="mobile-header">
+            <button class="btn-icon back-btn hidden">
+                <i class="fas fa-arrow-left"></i>
+            </button>
+            <div class="header-content">
+                <h2 class="chat-title">Yegram</h2>
+                <div class="chat-status" id="mobile-chat-status"></div>
+            </div>
+            <button class="btn-icon menu-btn">
+                <i class="fas fa-ellipsis-v"></i>
+            </button>
+        </div>
+
+        <!-- Мобильное меню -->
+        <div class="mobile-user-menu hidden" id="mobile-user-menu">
+            <div class="menu-header">
+                <div class="user-info-small">
+                    <div class="avatar" id="mobile-user-avatar">
+                        <span id="mobile-avatar-letter">?</span>
+                    </div>
+                    <div>
+                        <h3 id="mobile-username">Пользователь</h3>
+                        <div class="status-text" id="mobile-status-text">Подключение...</div>
                     </div>
                 </div>
-                <button class="btn-icon" id="user-menu-btn">
-                    <i class="fas fa-ellipsis-v"></i>
-                </button>
             </div>
-
-            <!-- ID пользователя -->
-            <div class="user-id-container">
-                <div class="id-label">Ваш ID:</div>
-                <div class="id-display">
-                    <code id="user-id-text">Загрузка...</code>
-                    <button class="btn-icon copy-btn" id="copy-id-btn" title="Скопировать ID">
-                        <i class="fas fa-copy"></i>
-                    </button>
-                </div>
-            </div>
-
-            <!-- Поиск и подключение -->
-            <div class="connect-container">
-                <div class="search-container">
-                    <i class="fas fa-search"></i>
-                    <input type="text" id="friend-search-input" placeholder="Поиск или ID друга">
-                </div>
-                <button class="btn-primary" id="connect-btn">
-                    <i class="fas fa-link"></i> Подключиться
-                </button>
-            </div>
-
-            <!-- Список диалогов -->
-            <div class="dialogs-list">
-                <div class="dialogs-header">
-                    <h4>Диалоги</h4>
-                    <button class="btn-icon" id="refresh-dialogs-btn" title="Обновить">
-                        <i class="fas fa-sync-alt"></i>
-                    </button>
-                </div>
-                <div class="dialogs" id="dialogs-list">
-                    <!-- Список диалогов загрузится через JS -->
-                </div>
-            </div>
-
-            <!-- Меню пользователя -->
-            <div class="user-menu hidden" id="user-menu">
-                <div class="menu-item" id="profile-settings">
+            <div class="menu-items">
+                <div class="menu-item" id="mobile-profile-settings">
                     <i class="fas fa-user-cog"></i> Настройки профиля
                 </div>
-                <div class="menu-item" id="export-data">
+                <div class="menu-item" id="mobile-export-data">
                     <i class="fas fa-download"></i> Экспорт данных
                 </div>
                 <div class="menu-divider"></div>
-                <div class="menu-item" id="switch-account">
+                <div class="menu-item" id="mobile-switch-account">
                     <i class="fas fa-exchange-alt"></i> Сменить аккаунт
                 </div>
-                <div class="menu-item" id="logout-btn">
+                <div class="menu-item" id="mobile-logout">
                     <i class="fas fa-sign-out-alt"></i> Выйти
                 </div>
             </div>
         </div>
 
-        <!-- Основная область -->
+        <!-- Основной контент -->
         <div class="main-content">
-            <!-- Экран приветствия -->
-            <div id="welcome-screen" class="welcome-screen">
-                <div class="welcome-content">
-                    <div class="welcome-icon">✈️</div>
-                    <h2>Добро пожаловать в Yegram!</h2>
-                    <p>1. Скопируйте свой ID и отправьте другу</p>
-                    <p>2. Введите ID друга в поле поиска слева</p>
-                    <p>3. Нажмите "Подключиться"</p>
-                    <p>4. Начните общение напрямую!</p>
-                    
-                    <div class="stats">
-                        <div class="stat-item">
-                            <i class="fas fa-shield-alt"></i>
-                            <div>
-                                <h4>Безопасность</h4>
-                                <p>P2P шифрование</p>
+            <!-- Вид списка диалогов (мобильный) -->
+            <div id="dialogs-view" class="dialogs-view">
+                <!-- Поиск и подключение -->
+                <div class="connect-container">
+                    <div class="search-container">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="friend-search-input" placeholder="ID друга или @юзернейм">
+                    </div>
+                    <button class="btn-primary" id="connect-btn">
+                        <i class="fas fa-link"></i> Подключиться
+                    </button>
+                </div>
+
+                <!-- Список диалогов -->
+                <div class="dialogs-list">
+                    <div class="dialogs-header">
+                        <h4>Диалоги</h4>
+                        <button class="btn-icon" id="refresh-dialogs-btn" title="Обновить">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </div>
+                    <div class="dialogs" id="dialogs-list">
+                        <!-- Список диалогов загрузится через JS -->
+                    </div>
+                </div>
+
+                <!-- Информация о пользователе внизу -->
+                <div class="mobile-user-footer">
+                    <div class="user-info">
+                        <div class="avatar" id="user-avatar">
+                            <span id="avatar-letter">?</span>
+                        </div>
+                        <div>
+                            <h3 id="current-username">Пользователь</h3>
+                            <div class="connection-status">
+                                <div class="status-dot" id="connection-dot"></div>
+                                <span id="connection-status">Подключение...</span>
                             </div>
                         </div>
-                        <div class="stat-item">
-                            <i class="fas fa-bolt"></i>
-                            <div>
-                                <h4>Скорость</h4>
-                                <p>Прямое соединение</p>
-                            </div>
-                        </div>
+                    </div>
+                    <div class="user-id">
+                        <code id="user-id-text">Загрузка...</code>
+                        <button class="btn-icon copy-btn" id="copy-id-btn" title="Скопировать">
+                            <i class="fas fa-copy"></i>
+                        </button>
                     </div>
                 </div>
             </div>
 
-            <!-- Активный чат -->
-            <div id="active-chat" class="active-chat hidden">
-                <!-- Заголовок чата -->
-                <div class="chat-header">
-                    <div class="chat-info">
-                        <div class="back-btn" id="back-to-dialogs-btn">
-                            <i class="fas fa-arrow-left"></i>
-                        </div>
-                        <div class="chat-contact">
-                            <div class="avatar" id="chat-avatar">
-                                <span id="chat-avatar-letter">?</span>
-                            </div>
-                            <div>
-                                <h3 id="chat-title">Диалог</h3>
-                                <div class="p2p-status">
-                                    <div class="status-dot" id="p2p-status-dot"></div>
-                                    <span id="p2p-status-text">P2P соединение...</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="chat-actions">
-                        <button class="btn-icon" id="chat-info-btn" title="Информация">
-                            <i class="fas fa-info-circle"></i>
-                        </button>
-                        <button class="btn-icon" id="clear-chat-btn" title="Очистить чат">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </div>
-                </div>
-
+            <!-- Вид чата (мобильный) -->
+            <div id="chat-view" class="chat-view hidden">
                 <!-- История сообщений -->
                 <div class="messages-wrapper">
                     <div class="messages-container" id="messages-container">
@@ -270,7 +233,6 @@
                     <button class="btn-icon" id="attach-btn" title="Прикрепить файл">
                         <i class="fas fa-paperclip"></i>
                     </button>
-                    <input type="file" id="file-input" accept="image/*" hidden>
                     
                     <div class="message-input-wrapper">
                         <div class="message-input">
@@ -302,41 +264,183 @@
                 </div>
             </div>
 
-            <!-- Информация о чате -->
-            <div class="chat-info-panel hidden" id="chat-info-panel">
-                <div class="panel-header">
-                    <h3>Информация о чате</h3>
-                    <button class="btn-icon close-panel">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-                <div class="panel-body">
-                    <div class="chat-details">
-                        <div class="detail-item">
-                            <span class="detail-label">Собеседник:</span>
-                            <span class="detail-value" id="chat-partner-name">-</span>
+            <!-- Десктоп интерфейс -->
+            <div class="desktop-interface">
+                <!-- Боковая панель -->
+                <div class="sidebar">
+                    <!-- Профиль пользователя -->
+                    <div class="user-profile">
+                        <div class="avatar" id="user-avatar-desktop">
+                            <span id="avatar-letter-desktop">?</span>
                         </div>
-                        <div class="detail-item">
-                            <span class="detail-label">ID собеседника:</span>
-                            <span class="detail-value" id="chat-partner-id">-</span>
+                        <div class="user-info">
+                            <h3 id="current-username-desktop">Пользователь</h3>
+                            <div class="connection-status">
+                                <div class="status-dot" id="connection-dot-desktop"></div>
+                                <span id="connection-status-desktop">Подключение...</span>
+                            </div>
                         </div>
-                        <div class="detail-item">
-                            <span class="detail-label">Сообщений:</span>
-                            <span class="detail-value" id="message-count">0</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">Статус:</span>
-                            <span class="detail-value" id="chat-status">Неактивно</span>
+                        <button class="btn-icon" id="user-menu-btn">
+                            <i class="fas fa-ellipsis-v"></i>
+                        </button>
+                    </div>
+
+                    <!-- ID пользователя -->
+                    <div class="user-id-container">
+                        <div class="id-label">Ваш ID:</div>
+                        <div class="id-display">
+                            <code id="user-id-text-desktop">Загрузка...</code>
+                            <button class="btn-icon copy-btn" id="copy-id-btn-desktop" title="Скопировать ID">
+                                <i class="fas fa-copy"></i>
+                            </button>
                         </div>
                     </div>
-                    
-                    <div class="info-actions">
-                        <button class="btn-full" id="export-chat-btn">
-                            <i class="fas fa-download"></i> Экспорт истории
+
+                    <!-- Поиск и подключение -->
+                    <div class="connect-container">
+                        <div class="search-container">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="friend-search-input-desktop" placeholder="Поиск или ID друга">
+                        </div>
+                        <button class="btn-primary" id="connect-btn-desktop">
+                            <i class="fas fa-link"></i> Подключиться
                         </button>
-                        <button class="btn-full btn-danger" id="delete-chat-btn">
-                            <i class="fas fa-trash"></i> Удалить диалог
-                        </button>
+                    </div>
+
+                    <!-- Список диалогов -->
+                    <div class="dialogs-list">
+                        <div class="dialogs-header">
+                            <h4>Диалоги</h4>
+                            <button class="btn-icon" id="refresh-dialogs-btn-desktop" title="Обновить">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                        <div class="dialogs" id="dialogs-list-desktop">
+                            <!-- Список диалогов загрузится через JS -->
+                        </div>
+                    </div>
+
+                    <!-- Меню пользователя -->
+                    <div class="user-menu hidden" id="user-menu">
+                        <div class="menu-item" id="profile-settings">
+                            <i class="fas fa-user-cog"></i> Настройки профиля
+                        </div>
+                        <div class="menu-item" id="export-data">
+                            <i class="fas fa-download"></i> Экспорт данных
+                        </div>
+                        <div class="menu-divider"></div>
+                        <div class="menu-item" id="switch-account">
+                            <i class="fas fa-exchange-alt"></i> Сменить аккаунт
+                        </div>
+                        <div class="menu-item" id="logout-btn">
+                            <i class="fas fa-sign-out-alt"></i> Выйти
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Основная область -->
+                <div class="main-area">
+                    <!-- Экран приветствия -->
+                    <div id="welcome-screen" class="welcome-screen">
+                        <div class="welcome-content">
+                            <div class="welcome-icon">✈️</div>
+                            <h2>Добро пожаловать в Yegram!</h2>
+                            <p>1. Скопируйте свой ID и отправьте другу</p>
+                            <p>2. Введите ID друга в поле поиска слева</p>
+                            <p>3. Нажмите "Подключиться"</p>
+                            <p>4. Начните общение напрямую!</p>
+                            
+                            <div class="stats">
+                                <div class="stat-item">
+                                    <i class="fas fa-shield-alt"></i>
+                                    <div>
+                                        <h4>Безопасность</h4>
+                                        <p>P2P шифрование</p>
+                                    </div>
+                                </div>
+                                <div class="stat-item">
+                                    <i class="fas fa-bolt"></i>
+                                    <div>
+                                        <h4>Скорость</h4>
+                                        <p>Прямое соединение</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Активный чат -->
+                    <div id="active-chat" class="active-chat hidden">
+                        <!-- Заголовок чата -->
+                        <div class="chat-header">
+                            <div class="chat-info">
+                                <div class="back-btn" id="back-to-dialogs-btn">
+                                    <i class="fas fa-arrow-left"></i>
+                                </div>
+                                <div class="chat-contact">
+                                    <div class="avatar" id="chat-avatar">
+                                        <span id="chat-avatar-letter">?</span>
+                                    </div>
+                                    <div>
+                                        <h3 id="chat-title">Диалог</h3>
+                                        <div class="p2p-status">
+                                            <div class="status-dot" id="p2p-status-dot"></div>
+                                            <span id="p2p-status-text">P2P соединение...</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="chat-actions">
+                                <button class="btn-icon" id="chat-info-btn" title="Информация">
+                                    <i class="fas fa-info-circle"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- История сообщений -->
+                        <div class="messages-wrapper">
+                            <div class="messages-container" id="messages-container-desktop">
+                                <!-- Сообщения загрузятся через JS -->
+                            </div>
+                            <div class="scroll-indicator hidden" id="scroll-indicator-desktop">
+                                <i class="fas fa-chevron-down"></i> Новые сообщения
+                            </div>
+                        </div>
+
+                        <!-- Панель ввода -->
+                        <div class="input-container">
+                            <button class="btn-icon" id="attach-btn-desktop" title="Прикрепить файл">
+                                <i class="fas fa-paperclip"></i>
+                            </button>
+                            
+                            <div class="message-input-wrapper">
+                                <div class="message-input">
+                                    <textarea id="message-input-desktop" placeholder="Введите сообщение..." rows="1"></textarea>
+                                    <button class="btn-icon" id="emoji-btn-desktop" title="Эмодзи">
+                                        <i class="far fa-smile"></i>
+                                    </button>
+                                </div>
+                                <div class="typing-indicator hidden" id="typing-indicator-desktop">
+                                    <span></span><span></span><span></span>
+                                </div>
+                            </div>
+                            
+                            <button class="btn-icon send-btn" id="send-btn-desktop" title="Отправить">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
+
+                        <!-- Панель эмодзи -->
+                        <div class="emoji-picker hidden" id="emoji-picker-desktop">
+                            <div class="emoji-categories">
+                                <button class="emoji-category active" data-category="smileys">😀</button>
+                                <button class="emoji-category" data-category="gestures">👋</button>
+                                <button class="emoji-category" data-category="objects">💡</button>
+                            </div>
+                            <div class="emoji-grid" id="emoji-grid-desktop">
+                                <!-- Эмодзи загрузятся через JS -->
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -361,6 +465,16 @@
                     <button class="btn-outline" id="modal-cancel">Отмена</button>
                     <button class="btn-primary" id="modal-confirm">Подтвердить</button>
                 </div>
+            </div>
+        </div>
+
+        <!-- Модальное окно для изображений -->
+        <div class="image-modal hidden" id="image-modal">
+            <div class="image-modal-content">
+                <button class="btn-icon close-image-modal" onclick="closeImageModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+                <img id="modal-image" src="" alt="Изображение">
             </div>
         </div>
     </div>
