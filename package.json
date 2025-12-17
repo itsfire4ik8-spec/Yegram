@@ -1,0 +1,12 @@
+{
+  "name": "yegram",
+  "version": "1.0.0",
+  "description": "P2P мессенджер",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": "18.x"
+  }
+}
