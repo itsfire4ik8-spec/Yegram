@@ -8,7 +8,19 @@ class Yegram {
         this.friends = new Map(); // ID друга -> информация о друге
         this.ws = null;
         
-        this.serverURL = 'ws://' + window.location.hostname + ':3000';
+        // Автоматическое определение URL сервера
+getServerUrl() {
+    // Если открыто локально (localhost) - используем localhost
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        return 'ws://localhost:10000'; // Порт из вашего server.js
+    }
+    // Если открыто на Render - используем защищенный WSS и текущий домен
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return protocol + '//' + window.location.host; // yegram.onrender.com
+}
+
+// Используйте в конструкторе Yegram:
+this.serverURL = this.getServerUrl();
         this.emojiList = this.generateEmojiList();
         
         this.init();
